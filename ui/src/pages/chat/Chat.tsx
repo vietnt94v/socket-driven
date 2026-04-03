@@ -9,7 +9,7 @@ type ChatMessage = {
   text: string
 }
 
-export function Chat() {
+const Chat = () => {
   const listId = useId()
   const listRef = useRef<HTMLDivElement>(null)
   const wsRef = useRef<WebSocket | null>(null)
@@ -40,7 +40,7 @@ export function Chat() {
     if (el) el.scrollTop = el.scrollHeight
   }, [messages])
 
-  function send() {
+  const send = () => {
     const text = input.trim()
     if (!text) return
     setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'self', text }])
@@ -98,3 +98,5 @@ export function Chat() {
     </div>
   )
 }
+
+export default Chat

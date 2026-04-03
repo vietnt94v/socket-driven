@@ -1,9 +1,9 @@
-import { useState, type FormEvent } from 'react'
+import { useState, type SubmitEvent } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { login } from '../../apis'
 import { useAuthStore } from '../../stores/authStore'
 
-export function Login() {
+const Login = () => {
   const navigate = useNavigate()
   const token = useAuthStore((s) => s.token)
   const setSession = useAuthStore((s) => s.setSession)
@@ -16,7 +16,7 @@ export function Login() {
     return <Navigate to="/home" replace />
   }
 
-  async function handleSubmit(e: FormEvent) {
+  const handleSubmit = async (e: SubmitEvent<HTMLFormElement>) => {
     e.preventDefault()
     setError(null)
     setPending(true)
@@ -80,3 +80,5 @@ export function Login() {
     </div>
   )
 }
+
+export default Login
