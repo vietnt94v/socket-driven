@@ -1,55 +1,58 @@
-import { useEffect, useId, useRef, useState } from 'react'
-import { closeSocket, createChatSocket } from '../../apis'
+import { useEffect, useId, useRef, useState } from 'react';
+import { closeSocket, createChatSocket } from '../../apis';
 
-type Role = 'self' | 'peer'
+type Role = 'self' | 'peer';
 
 type ChatMessage = {
-  id: string
-  role: Role
-  text: string
-}
+  id: string;
+  role: Role;
+  text: string;
+};
 
 const Chat = () => {
-  const listId = useId()
-  const listRef = useRef<HTMLDivElement>(null)
-  const wsRef = useRef<WebSocket | null>(null)
-  const [input, setInput] = useState('')
+  const listId = useId();
+  const listRef = useRef<HTMLDivElement>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+  const [input, setInput] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([
     { id: 'seed-1', role: 'peer', text: 'Hi.' },
-  ])
+  ]);
 
   useEffect(() => {
-    const url = import.meta.env.VITE_WS_URL
+    const url = import.meta.env.VITE_WS_URL;
     const ws = createChatSocket(url, {
       onMessage: (data) => {
         setMessages((prev) => [
           ...prev,
           { id: crypto.randomUUID(), role: 'peer', text: data },
-        ])
+        ]);
       },
-    })
-    wsRef.current = ws
+    });
+    wsRef.current = ws;
     return () => {
-      closeSocket(wsRef.current)
-      wsRef.current = null
-    }
-  }, [])
+      closeSocket(wsRef.current);
+      wsRef.current = null;
+    };
+  }, []);
 
   useEffect(() => {
-    const el = listRef.current
-    if (el) el.scrollTop = el.scrollHeight
-  }, [messages])
+    const el = listRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [messages]);
 
   const send = () => {
-    const text = input.trim()
-    if (!text) return
-    setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'self', text }])
-    setInput('')
-    const ws = wsRef.current
+    const text = input.trim();
+    if (!text) return;
+    setMessages((prev) => [
+      ...prev,
+      { id: crypto.randomUUID(), role: 'self', text },
+    ]);
+    setInput('');
+    const ws = wsRef.current;
     if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(text)
+      ws.send(text);
     }
-  }
+  };
 
   return (
     <div className="mx-auto flex min-h-screen max-w-md flex-col gap-3 p-4">
@@ -80,8 +83,8 @@ const Chat = () => {
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault()
-              send()
+              e.preventDefault();
+              send();
             }
           }}
           placeholder="Message"
@@ -96,7 +99,7 @@ const Chat = () => {
         </button>
       </div>
     </div>
-  )
-}
+  );
+};
 
-export default Chat
+export default Chat;

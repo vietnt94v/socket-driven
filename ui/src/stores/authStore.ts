@@ -1,22 +1,22 @@
-import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 
 export type AuthUser = {
-  id: number
-  username: string
-  email: string
-  firstName: string
-  lastName: string
-  gender: string
-  image: string
-}
+  id: number;
+  username: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  gender: string;
+  image: string;
+};
 
 type AuthState = {
-  token: string | null
-  user: AuthUser | null
-  setSession: (token: string, user: AuthUser) => void
-  logout: () => void
-}
+  token: string | null;
+  user: AuthUser | null;
+  setSession: (token: string, user: AuthUser) => void;
+  logout: () => void;
+};
 
 export const useAuthStore = create<AuthState>()(
   persist(
@@ -28,4 +28,4 @@ export const useAuthStore = create<AuthState>()(
     }),
     { name: 'auth' },
   ),
-)
+);

@@ -1,11 +1,11 @@
-import { lazy } from 'react'
-import { Route, Routes } from 'react-router-dom'
-import { ProtectedRoute } from './ProtectedRoute'
-import { RootRedirect } from './RootRedirect'
+import { lazy } from 'react';
+import { Route, Routes } from 'react-router-dom';
+import { ProtectedRoute } from './ProtectedRoute';
+import { RootRedirect } from './RootRedirect';
 
-const Login = lazy(() => import('../pages/login/Login'))
-const Home = lazy(() => import('../pages/home/Home'))
-const Chat = lazy(() => import('../pages/chat/Chat'))
+const Login = lazy(() => import('../pages/login/Login'));
+const Home = lazy(() => import('../pages/home/Home'));
+const Chat = lazy(() => import('../pages/chat/Chat'));
 
 export const AppRoutes = () => (
   <Routes>
@@ -28,4 +28,4 @@ export const AppRoutes = () => (
       }
     />
   </Routes>
-)
+);

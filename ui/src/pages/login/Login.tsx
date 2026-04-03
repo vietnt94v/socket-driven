@@ -1,35 +1,35 @@
-import { useState, type SubmitEvent } from 'react'
-import { Navigate, useNavigate } from 'react-router-dom'
-import { login } from '../../apis'
-import { useAuthStore } from '../../stores/authStore'
+import { useState, type SubmitEvent } from 'react';
+import { Navigate, useNavigate } from 'react-router-dom';
+import { login } from '../../apis';
+import { useAuthStore } from '../../stores/authStore';
 
 const Login = () => {
-  const navigate = useNavigate()
-  const token = useAuthStore((s) => s.token)
-  const setSession = useAuthStore((s) => s.setSession)
-  const [username, setUsername] = useState('')
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [pending, setPending] = useState(false)
+  const navigate = useNavigate();
+  const token = useAuthStore((s) => s.token);
+  const setSession = useAuthStore((s) => s.setSession);
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
 
   if (token) {
-    return <Navigate to="/home" replace />
+    return <Navigate to="/home" replace />;
   }
 
   const handleSubmit = async (e: SubmitEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    setError(null)
-    setPending(true)
+    e.preventDefault();
+    setError(null);
+    setPending(true);
     try {
-      const { accessToken, user } = await login(username, password)
-      setSession(accessToken, user)
-      navigate('/home', { replace: true })
+      const { accessToken, user } = await login(username, password);
+      setSession(accessToken, user);
+      navigate('/home', { replace: true });
     } catch {
-      setError('Login failed. Check username and password.')
+      setError('Login failed. Check username and password.');
     } finally {
-      setPending(false)
+      setPending(false);
     }
-  }
+  };
 
   return (
     <div className="flex min-h-screen items-center justify-center p-6">
@@ -41,7 +41,9 @@ const Login = () => {
           Login
         </h1>
         <label className="flex flex-col gap-1 text-left text-sm">
-          <span className="text-neutral-600 dark:text-neutral-400">Username</span>
+          <span className="text-neutral-600 dark:text-neutral-400">
+            Username
+          </span>
           <input
             className="rounded border border-neutral-300 px-3 py-2 dark:border-neutral-600 dark:bg-neutral-900"
             value={username}
@@ -51,7 +53,9 @@ const Login = () => {
           />
         </label>
         <label className="flex flex-col gap-1 text-left text-sm">
-          <span className="text-neutral-600 dark:text-neutral-400">Password</span>
+          <span className="text-neutral-600 dark:text-neutral-400">
+            Password
+          </span>
           <input
             type="password"
             className="rounded border border-neutral-300 px-3 py-2 dark:border-neutral-600 dark:bg-neutral-900"
@@ -62,7 +66,10 @@ const Login = () => {
           />
         </label>
         {error ? (
-          <p className="text-center text-sm text-red-600 dark:text-red-400" role="alert">
+          <p
+            className="text-center text-sm text-red-600 dark:text-red-400"
+            role="alert"
+          >
             {error}
           </p>
         ) : null}
@@ -78,7 +85,7 @@ const Login = () => {
         </p>
       </form>
     </div>
-  )
-}
+  );
+};
 
-export default Login
+export default Login;

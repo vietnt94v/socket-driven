@@ -1,7 +1,7 @@
-import { useAuthStore } from '../../stores/authStore'
+import { useAuthStore } from '../../stores/authStore';
 
 const Home = () => {
-  const user = useAuthStore((s) => s.user)
+  const user = useAuthStore((s) => s.user);
 
   return (
     <div className="flex min-h-screen items-center justify-center p-6">
@@ -17,33 +17,45 @@ const Home = () => {
               <h1 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
                 {user.firstName} {user.lastName}
               </h1>
-              <p className="text-sm text-neutral-500 dark:text-neutral-400">@{user.username}</p>
+              <p className="text-sm text-neutral-500 dark:text-neutral-400">
+                @{user.username}
+              </p>
             </div>
             <dl className="w-full space-y-2 text-sm">
               <div className="flex justify-between gap-4 border-t border-neutral-100 pt-3 dark:border-neutral-800">
-                <dt className="text-neutral-500 dark:text-neutral-400">Email</dt>
+                <dt className="text-neutral-500 dark:text-neutral-400">
+                  Email
+                </dt>
                 <dd className="truncate text-right font-medium text-neutral-900 dark:text-neutral-100">
                   {user.email}
                 </dd>
               </div>
               <div className="flex justify-between gap-4">
-                <dt className="text-neutral-500 dark:text-neutral-400">Gender</dt>
+                <dt className="text-neutral-500 dark:text-neutral-400">
+                  Gender
+                </dt>
                 <dd className="text-right font-medium capitalize text-neutral-900 dark:text-neutral-100">
                   {user.gender}
                 </dd>
               </div>
               <div className="flex justify-between gap-4">
-                <dt className="text-neutral-500 dark:text-neutral-400">User ID</dt>
-                <dd className="font-mono text-right text-neutral-900 dark:text-neutral-100">{user.id}</dd>
+                <dt className="text-neutral-500 dark:text-neutral-400">
+                  User ID
+                </dt>
+                <dd className="font-mono text-right text-neutral-900 dark:text-neutral-100">
+                  {user.id}
+                </dd>
               </div>
             </dl>
           </div>
         </article>
       ) : (
-        <p className="text-lg text-neutral-500 dark:text-neutral-400">No user profile.</p>
+        <p className="text-lg text-neutral-500 dark:text-neutral-400">
+          No user profile.
+        </p>
       )}
     </div>
-  )
-}
+  );
+};
 
-export default Home
+export default Home;
