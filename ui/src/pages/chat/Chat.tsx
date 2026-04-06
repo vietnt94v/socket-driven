@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { closeSocket, createChatSocket } from '../../apis';
+import { useAuthStore } from '../../stores/authStore';
 
 type Role = 'self' | 'peer';
 
@@ -9,17 +10,23 @@ type ChatMessage = {
   text: string;
 };
 
+const wsBase =
+  import.meta.env.VITE_WS_URL ?? 'ws://localhost:8081/ws/chat';
+
 const Chat = () => {
   const listId = useId();
   const listRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
+  const token = useAuthStore((s) => s.token);
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([
     { id: 'seed-1', role: 'peer', text: 'Hi.' },
   ]);
 
   useEffect(() => {
-    const url = import.meta.env.VITE_WS_URL;
+    const url = token
+      ? `${wsBase}?token=${encodeURIComponent(token)}`
+      : undefined;
     const ws = createChatSocket(url, {
       onMessage: (data) => {
         setMessages((prev) => [
@@ -33,7 +40,7 @@ const Chat = () => {
       closeSocket(wsRef.current);
       wsRef.current = null;
     };
-  }, []);
+  }, [token]);
 
   useEffect(() => {
     const el = listRef.current;

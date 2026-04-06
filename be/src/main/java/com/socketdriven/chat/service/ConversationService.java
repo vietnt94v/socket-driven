@@ -1,0 +1,218 @@
+package com.socketdriven.chat.service;
+
+import com.socketdriven.chat.api.dto.ConversationDto;
+import com.socketdriven.chat.api.dto.CreateGroupRequest;
+import com.socketdriven.chat.domain.Conversation;
+import com.socketdriven.chat.domain.ConversationMember;
+import com.socketdriven.chat.domain.ConversationType;
+import com.socketdriven.chat.domain.MemberRole;
+import com.socketdriven.chat.domain.User;
+import com.socketdriven.chat.repository.ConversationMemberRepository;
+import com.socketdriven.chat.repository.ConversationRepository;
+import com.socketdriven.chat.repository.UserRepository;
+import java.time.Instant;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+public class ConversationService {
+
+  private final ConversationRepository conversationRepository;
+  private final ConversationMemberRepository conversationMemberRepository;
+  private final UserRepository userRepository;
+  private final MessageService messageService;
+
+  public ConversationService(
+      ConversationRepository conversationRepository,
+      ConversationMemberRepository conversationMemberRepository,
+      UserRepository userRepository,
+      MessageService messageService) {
+    this.conversationRepository = conversationRepository;
+    this.conversationMemberRepository = conversationMemberRepository;
+    this.userRepository = userRepository;
+    this.messageService = messageService;
+  }
+
+  @Transactional(readOnly = true)
+  public List<ConversationDto> listForUser(UUID userId) {
+    return conversationMemberRepository.findActiveForUserOrderByLastMessage(userId).stream()
+        .map(cm -> toDto(cm.getConversation()))
+        .toList();
+  }
+
+  @Transactional
+  public ConversationDto findOrCreateDirect(UUID me, UUID otherUserId) {
+    if (me.equals(otherUserId)) {
+      throw new IllegalArgumentException("cannot chat with self");
+    }
+    userRepository.findById(otherUserId).orElseThrow();
+    Optional<Conversation> existing =
+        conversationRepository.findDirectBetween(me, otherUserId, ConversationType.DIRECT);
+    if (existing.isPresent()) {
+      return toDto(existing.get());
+    }
+    User meUser = userRepository.findById(me).orElseThrow();
+    User other = userRepository.getReferenceById(otherUserId);
+    Conversation c = new Conversation();
+    c.setType(ConversationType.DIRECT);
+    c.setCreatedBy(meUser);
+    conversationRepository.save(c);
+    ConversationMember m1 = new ConversationMember();
+    m1.setConversation(c);
+    m1.setUser(meUser);
+    m1.setRole(MemberRole.MEMBER);
+    m1.setAddedBy(meUser);
+    ConversationMember m2 = new ConversationMember();
+    m2.setConversation(c);
+    m2.setUser(other);
+    m2.setRole(MemberRole.MEMBER);
+    m2.setAddedBy(meUser);
+    conversationMemberRepository.save(m1);
+    conversationMemberRepository.save(m2);
+    return toDto(c);
+  }
+
+  @Transactional
+  public ConversationDto createGroup(UUID creatorId, CreateGroupRequest req) {
+    if (req.name() == null || req.name().isBlank()) {
+      throw new IllegalArgumentException("group name required");
+    }
+    Set<UUID> all = new HashSet<>(req.memberIds());
+    all.add(creatorId);
+    if (all.size() < 3) {
+      throw new IllegalArgumentException("group needs at least 3 members including creator");
+    }
+    for (UUID uid : all) {
+      userRepository.findById(uid).orElseThrow();
+    }
+    User creator = userRepository.findById(creatorId).orElseThrow();
+    Conversation c = new Conversation();
+    c.setType(ConversationType.GROUP);
+    c.setName(req.name().trim());
+    c.setCreatedBy(creator);
+    conversationRepository.save(c);
+    for (UUID uid : all) {
+      ConversationMember cm = new ConversationMember();
+      cm.setConversation(c);
+      cm.setUser(userRepository.getReferenceById(uid));
+      cm.setRole(uid.equals(creatorId) ? MemberRole.ADMIN : MemberRole.MEMBER);
+      cm.setAddedBy(creator);
+      conversationMemberRepository.save(cm);
+    }
+    return toDto(c);
+  }
+
+  @Transactional
+  public void removeMember(UUID conversationId, UUID actorId, UUID targetUserId) {
+    Conversation c = conversationRepository.findById(conversationId).orElseThrow();
+    if (c.getType() != ConversationType.GROUP) {
+      throw new IllegalArgumentException("only for group");
+    }
+    ConversationMember actor =
+        conversationMemberRepository
+            .findByConversation_IdAndUser_Id(conversationId, actorId)
+            .orElseThrow();
+    ConversationMember target =
+        conversationMemberRepository
+            .findByConversation_IdAndUser_Id(conversationId, targetUserId)
+            .orElseThrow();
+    if (!target.isActive()) {
+      return;
+    }
+    boolean self = actorId.equals(targetUserId);
+    if (!self && actor.getRole() != MemberRole.ADMIN) {
+      throw new IllegalArgumentException("forbidden");
+    }
+    if (target.getRole() == MemberRole.ADMIN) {
+      List<ConversationMember> ranked =
+          conversationMemberRepository.findActiveByConversationOrderByJoinedAt(conversationId);
+      Optional<ConversationMember> successor =
+          ranked.stream()
+              .filter(m -> !m.getUser().getId().equals(targetUserId))
+              .findFirst();
+      successor.ifPresent(
+          s -> {
+            s.setRole(MemberRole.ADMIN);
+            conversationMemberRepository.save(s);
+          });
+    }
+    target.setActive(false);
+    target.setLeftAt(Instant.now());
+    target.setRemovedBy(actor.getUser());
+    conversationMemberRepository.save(target);
+    long remaining = conversationMemberRepository.countByConversation_IdAndActiveTrue(conversationId);
+    if (remaining <= 1) {
+      dissolve(conversationId);
+    }
+    String label =
+        Optional.ofNullable(target.getUser().getDisplayName())
+            .orElse(target.getUser().getUsername());
+    messageService.postSystemMessage(conversationId, actor.getUser(), label + " left the group");
+  }
+
+  @Transactional
+  public void addMember(UUID conversationId, UUID actorId, UUID newUserId) {
+    Conversation c = conversationRepository.findById(conversationId).orElseThrow();
+    if (c.getType() != ConversationType.GROUP) {
+      throw new IllegalArgumentException("only for group");
+    }
+    ConversationMember actor =
+        conversationMemberRepository
+            .findByConversation_IdAndUser_Id(conversationId, actorId)
+            .orElseThrow();
+    if (actor.getRole() != MemberRole.ADMIN || !actor.isActive()) {
+      throw new IllegalArgumentException("forbidden");
+    }
+    userRepository.findById(newUserId).orElseThrow();
+    Optional<ConversationMember> existing =
+        conversationMemberRepository.findByConversation_IdAndUser_Id(conversationId, newUserId);
+    if (existing.isPresent()) {
+      ConversationMember cm = existing.get();
+      if (cm.isActive()) {
+        throw new IllegalArgumentException("already member");
+      }
+      cm.setActive(true);
+      cm.setLeftAt(null);
+      cm.setJoinedAt(Instant.now());
+      cm.setAddedBy(actor.getUser());
+      cm.setRemovedBy(null);
+      cm.setRole(MemberRole.MEMBER);
+      conversationMemberRepository.save(cm);
+    } else {
+      ConversationMember cm = new ConversationMember();
+      cm.setConversation(c);
+      cm.setUser(userRepository.getReferenceById(newUserId));
+      cm.setRole(MemberRole.MEMBER);
+      cm.setAddedBy(actor.getUser());
+      conversationMemberRepository.save(cm);
+    }
+    User nu = userRepository.findById(newUserId).orElseThrow();
+    String label = Optional.ofNullable(nu.getDisplayName()).orElse(nu.getUsername());
+    messageService.postSystemMessage(
+        conversationId, actor.getUser(), label + " was added to the group");
+  }
+
+  private void dissolve(UUID conversationId) {
+    List<ConversationMember> active =
+        conversationMemberRepository.findByConversation_IdAndActiveTrue(conversationId);
+    for (ConversationMember cm : active) {
+      cm.setActive(false);
+      cm.setLeftAt(Instant.now());
+      conversationMemberRepository.save(cm);
+    }
+  }
+
+  private static ConversationDto toDto(Conversation c) {
+    return new ConversationDto(
+        c.getId(),
+        c.getType().name(),
+        c.getName(),
+        c.getAvatarUrl(),
+        c.getLastMessageAt());
+  }
+}

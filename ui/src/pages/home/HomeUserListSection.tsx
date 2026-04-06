@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { fetchUsers, type DummyJsonUser } from '../../apis';
+import { fetchUsers, type DirectoryUser } from '../../apis';
 
-const storyRing = (id: number) => id % 5 === 0;
+const storyRing = (id: string) =>
+  id.split('').reduce((a, c) => a + c.charCodeAt(0), 0) % 5 === 0;
 
 const EditFabIcon = () => (
   <svg
@@ -22,7 +23,7 @@ const EditFabIcon = () => (
 );
 
 type HomeUserListSectionProps = {
-  excludeUserId?: number;
+  excludeUserId?: string;
   className?: string;
 };
 
@@ -30,14 +31,12 @@ const HomeUserListSection = ({
   excludeUserId,
   className = '',
 }: HomeUserListSectionProps) => {
-  const [users, setUsers] = useState<DummyJsonUser[]>([]);
+  const [users, setUsers] = useState<DirectoryUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setError(null);
     fetchUsers()
       .then((list) => {
         if (!cancelled) setUsers(list);

@@ -81,7 +81,7 @@ const Login = () => {
           {pending ? 'Signing in…' : 'Sign in'}
         </button>
         <p className="text-center text-xs text-neutral-500">
-          DummyJSON test user: emilys / emilyspass
+          Local demo: demo / demo
         </p>
       </form>
     </div>
