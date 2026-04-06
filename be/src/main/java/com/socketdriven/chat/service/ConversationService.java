@@ -1,7 +1,11 @@
 package com.socketdriven.chat.service;
 
 import com.socketdriven.chat.api.dto.ConversationDto;
+import com.socketdriven.chat.api.dto.CreateConversationRequest;
 import com.socketdriven.chat.api.dto.CreateGroupRequest;
+import com.socketdriven.chat.api.dto.MemberDto;
+import com.socketdriven.chat.api.dto.PatchConversationRequest;
+import com.socketdriven.chat.api.dto.UpdateMemberRoleRequest;
 import com.socketdriven.chat.domain.Conversation;
 import com.socketdriven.chat.domain.ConversationMember;
 import com.socketdriven.chat.domain.ConversationType;
@@ -16,8 +20,10 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class ConversationService {
@@ -43,6 +49,115 @@ public class ConversationService {
     return conversationMemberRepository.findActiveForUserOrderByLastMessage(userId).stream()
         .map(cm -> toDto(cm.getConversation()))
         .toList();
+  }
+
+  @Transactional
+  public ConversationDto createConversation(UUID me, CreateConversationRequest req) {
+    if (req.type() == null || req.type().isBlank()) {
+      throw new IllegalArgumentException("type required");
+    }
+    String t = req.type().trim().toUpperCase();
+    if ("DIRECT".equals(t)) {
+      if (req.otherUserId() == null) {
+        throw new IllegalArgumentException("otherUserId required for DIRECT");
+      }
+      return findOrCreateDirect(me, req.otherUserId());
+    }
+    if ("GROUP".equals(t)) {
+      if (req.name() == null || req.name().isBlank()) {
+        throw new IllegalArgumentException("name required for GROUP");
+      }
+      if (req.memberIds() == null || req.memberIds().isEmpty()) {
+        throw new IllegalArgumentException("memberIds required for GROUP");
+      }
+      return createGroup(me, new CreateGroupRequest(req.name(), req.memberIds()));
+    }
+    throw new IllegalArgumentException("invalid type");
+  }
+
+  @Transactional(readOnly = true)
+  public ConversationDto getConversation(UUID conversationId, UUID userId) {
+    ensureActiveMember(conversationId, userId);
+    Conversation c = conversationRepository.findById(conversationId).orElseThrow();
+    return toDto(c);
+  }
+
+  @Transactional
+  public ConversationDto patchConversation(
+      UUID conversationId, UUID actorId, PatchConversationRequest req) {
+    Conversation c = conversationRepository.findById(conversationId).orElseThrow();
+    if (c.getType() != ConversationType.GROUP) {
+      throw new IllegalArgumentException("only group can be updated");
+    }
+    ConversationMember actor = requireAdmin(conversationId, actorId);
+    if (req.name() != null && !req.name().isBlank()) {
+      c.setName(req.name().trim());
+    }
+    if (req.avatarUrl() != null) {
+      c.setAvatarUrl(req.avatarUrl().isBlank() ? null : req.avatarUrl().trim());
+    }
+    conversationRepository.save(c);
+    return toDto(c);
+  }
+
+  @Transactional
+  public void deleteGroupConversation(UUID conversationId, UUID actorId) {
+    Conversation c = conversationRepository.findById(conversationId).orElseThrow();
+    if (c.getType() != ConversationType.GROUP) {
+      throw new IllegalArgumentException("only group can be deleted");
+    }
+    requireAdmin(conversationId, actorId);
+    dissolve(conversationId);
+  }
+
+  @Transactional(readOnly = true)
+  public List<MemberDto> listMembers(UUID conversationId, UUID viewerId) {
+    ensureActiveMember(conversationId, viewerId);
+    return conversationMemberRepository.findByConversation_IdAndActiveTrue(conversationId).stream()
+        .map(ConversationService::toMemberDto)
+        .toList();
+  }
+
+  @Transactional
+  public void updateMemberRole(
+      UUID conversationId,
+      UUID actorId,
+      UUID targetUserId,
+      UpdateMemberRoleRequest req) {
+    Conversation c = conversationRepository.findById(conversationId).orElseThrow();
+    if (c.getType() != ConversationType.GROUP) {
+      throw new IllegalArgumentException("only for group");
+    }
+    requireAdmin(conversationId, actorId);
+    MemberRole newRole;
+    try {
+      newRole = MemberRole.valueOf(req.role().trim().toUpperCase());
+    } catch (Exception e) {
+      throw new IllegalArgumentException("invalid role");
+    }
+    ConversationMember target =
+        conversationMemberRepository
+            .findByConversation_IdAndUser_Id(conversationId, targetUserId)
+            .orElseThrow();
+    if (!target.isActive()) {
+      throw new IllegalArgumentException("not an active member");
+    }
+    if (target.getRole() == MemberRole.ADMIN && newRole == MemberRole.MEMBER) {
+      long admins =
+          conversationMemberRepository.countByConversation_IdAndActiveTrueAndRole(
+              conversationId, MemberRole.ADMIN);
+      if (admins <= 1) {
+        throw new ResponseStatusException(
+            HttpStatus.FORBIDDEN, "cannot remove last admin");
+      }
+    }
+    target.setRole(newRole);
+    conversationMemberRepository.save(target);
+  }
+
+  @Transactional
+  public void leaveConversation(UUID conversationId, UUID userId) {
+    removeMember(conversationId, userId, userId);
   }
 
   @Transactional
@@ -197,6 +312,24 @@ public class ConversationService {
         conversationId, actor.getUser(), label + " was added to the group");
   }
 
+  private ConversationMember requireAdmin(UUID conversationId, UUID userId) {
+    ConversationMember m =
+        conversationMemberRepository
+            .findByConversation_IdAndUser_Id(conversationId, userId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN));
+    if (!m.isActive() || m.getRole() != MemberRole.ADMIN) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+    }
+    return m;
+  }
+
+  private void ensureActiveMember(UUID conversationId, UUID userId) {
+    conversationMemberRepository
+        .findByConversation_IdAndUser_Id(conversationId, userId)
+        .filter(ConversationMember::isActive)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN));
+  }
+
   private void dissolve(UUID conversationId) {
     List<ConversationMember> active =
         conversationMemberRepository.findByConversation_IdAndActiveTrue(conversationId);
@@ -205,6 +338,16 @@ public class ConversationService {
       cm.setLeftAt(Instant.now());
       conversationMemberRepository.save(cm);
     }
+  }
+
+  private static MemberDto toMemberDto(ConversationMember cm) {
+    User u = cm.getUser();
+    return new MemberDto(
+        u.getId(),
+        u.getUsername(),
+        Optional.ofNullable(u.getDisplayName()).orElse(""),
+        cm.getRole().name(),
+        cm.getJoinedAt());
   }
 
   private static ConversationDto toDto(Conversation c) {

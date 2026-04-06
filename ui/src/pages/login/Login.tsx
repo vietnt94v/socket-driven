@@ -81,7 +81,7 @@ const Login = () => {
           {pending ? 'Signing in…' : 'Sign in'}
         </button>
         <p className="text-center text-xs text-neutral-500">
-          Local demo: demo / demo
+          Local: viet / A@123 (or vananh, smarty — password A@123)
         </p>
       </form>
     </div>

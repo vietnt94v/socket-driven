@@ -38,9 +38,10 @@ public class JwtService {
         .compact();
   }
 
-  public String createRefreshToken(UUID userId) {
+  public String createRefreshToken(UUID userId, String jti) {
     Instant now = Instant.now();
     return Jwts.builder()
+        .id(jti)
         .subject(userId.toString())
         .claim("typ", "refresh")
         .issuedAt(Date.from(now))
@@ -49,12 +50,33 @@ public class JwtService {
         .compact();
   }
 
+  public Instant refreshExpirationInstant() {
+    return Instant.now().plusSeconds(refreshDays * 24 * 60 * 60);
+  }
+
   public Claims parseClaims(String token) {
     return Jwts.parser().verifyWith(key).build().parseSignedClaims(token).getPayload();
   }
 
   public UUID parseUserId(String token) {
     return UUID.fromString(parseClaims(token).getSubject());
+  }
+
+  public String parseJti(String token) {
+    String id = parseClaims(token).getId();
+    if (id == null || id.isEmpty()) {
+      throw new IllegalArgumentException("missing jti");
+    }
+    return id;
+  }
+
+  public boolean isRefreshTokenClaims(String token) {
+    try {
+      Claims c = parseClaims(token);
+      return "refresh".equals(c.get("typ"));
+    } catch (Exception e) {
+      return false;
+    }
   }
 
   public boolean isValid(String token) {

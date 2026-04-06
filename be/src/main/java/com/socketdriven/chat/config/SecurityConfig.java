@@ -59,9 +59,13 @@ public class SecurityConfig {
             s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authorizeHttpRequests(
             a ->
-                a.requestMatchers(HttpMethod.GET, "/api/health")
+                a.requestMatchers(HttpMethod.GET, "/api/health", "/uploads/**")
                     .permitAll()
-                    .requestMatchers("/auth/login", "/auth/register")
+                    .requestMatchers(
+                        "/api/auth/login",
+                        "/api/auth/register",
+                        "/api/auth/refresh",
+                        "/api/auth/logout")
                     .permitAll()
                     .requestMatchers("/ws/**")
                     .permitAll()

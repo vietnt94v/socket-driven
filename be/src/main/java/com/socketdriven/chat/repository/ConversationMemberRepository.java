@@ -25,6 +25,9 @@ public interface ConversationMemberRepository extends JpaRepository<Conversation
 
   long countByConversation_IdAndActiveTrue(UUID conversationId);
 
+  long countByConversation_IdAndActiveTrueAndRole(
+      UUID conversationId, MemberRole role);
+
   @Query(
       """
       SELECT m FROM ConversationMember m

@@ -1,6 +1,7 @@
 package com.socketdriven.chat.service;
 
 import com.socketdriven.chat.api.dto.MessageDto;
+import com.socketdriven.chat.api.dto.PatchMessageRequest;
 import com.socketdriven.chat.api.dto.SendMessageRequest;
 import com.socketdriven.chat.domain.Conversation;
 import com.socketdriven.chat.domain.ConversationMember;
@@ -25,8 +26,10 @@ import java.util.Set;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class MessageService {
@@ -113,6 +116,38 @@ public class MessageService {
     }
     messageStatusRepository.saveAll(statuses);
 
+    return toDto(m);
+  }
+
+  @Transactional
+  public void softDeleteMessage(UUID messageId, UUID actorId) {
+    Message m = messageRepository.findById(messageId).orElseThrow();
+    if (!m.getSender().getId().equals(actorId)) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+    }
+    if (m.isDeleted()) {
+      return;
+    }
+    m.setDeleted(true);
+    m.setUpdatedAt(Instant.now());
+    messageRepository.save(m);
+  }
+
+  @Transactional
+  public MessageDto patchMessage(UUID messageId, UUID actorId, PatchMessageRequest req) {
+    Message m = messageRepository.findById(messageId).orElseThrow();
+    if (!m.getSender().getId().equals(actorId)) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+    }
+    if (m.isDeleted() || m.getType() != MessageType.TEXT) {
+      throw new IllegalArgumentException("cannot edit this message");
+    }
+    if (req.content() == null || req.content().isBlank()) {
+      throw new IllegalArgumentException("content required");
+    }
+    m.setContent(req.content());
+    m.setUpdatedAt(Instant.now());
+    messageRepository.save(m);
     return toDto(m);
   }
 
