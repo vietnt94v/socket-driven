@@ -3,5 +3,5 @@ import { useAuthStore } from '../stores/authStore';
 
 export const RootRedirect = () => {
   const token = useAuthStore((s) => s.token);
-  return <Navigate to={token ? '/home' : '/login'} replace />;
+  return <Navigate to={token ? '/messages' : '/login'} replace />;
 };

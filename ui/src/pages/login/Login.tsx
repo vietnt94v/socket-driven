@@ -13,7 +13,7 @@ const Login = () => {
   const [pending, setPending] = useState(false);
 
   if (token) {
-    return <Navigate to="/home" replace />;
+    return <Navigate to="/messages" replace />;
   }
 
   const handleSubmit = async (e: SubmitEvent<HTMLFormElement>) => {
@@ -23,7 +23,7 @@ const Login = () => {
     try {
       const { accessToken, user } = await login(username, password);
       setSession(accessToken, user);
-      navigate('/home', { replace: true });
+      navigate('/messages', { replace: true });
     } catch {
       setError('Login failed. Check username and password.');
     } finally {

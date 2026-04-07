@@ -51,6 +51,17 @@ public class ConversationService {
         .toList();
   }
 
+  @Transactional(readOnly = true)
+  public Optional<ConversationDto> getDirectIfExists(UUID me, UUID otherUserId) {
+    if (me.equals(otherUserId)) {
+      throw new IllegalArgumentException("cannot chat with self");
+    }
+    userRepository.findById(otherUserId).orElseThrow();
+    return conversationRepository
+        .findDirectBetween(me, otherUserId, ConversationType.DIRECT)
+        .map(ConversationService::toDto);
+  }
+
   @Transactional
   public ConversationDto createConversation(UUID me, CreateConversationRequest req) {
     if (req.type() == null || req.type().isBlank()) {

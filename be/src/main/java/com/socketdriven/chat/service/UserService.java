@@ -35,6 +35,17 @@ public class UserService {
   }
 
   @Transactional(readOnly = true)
+  public List<UserSummaryDto> searchExcludingUser(UUID excludeUserId, String q) {
+    if (q == null || q.isBlank()) {
+      return List.of();
+    }
+    return userRepository.searchByQuery(q.trim()).stream()
+        .filter(u -> !u.getId().equals(excludeUserId))
+        .map(UserService::toSummary)
+        .toList();
+  }
+
+  @Transactional(readOnly = true)
   public UserSummaryDto getById(UUID id) {
     User u = userRepository.findById(id).orElseThrow();
     return toSummary(u);

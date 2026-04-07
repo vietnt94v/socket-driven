@@ -1,109 +1,148 @@
-import { useEffect, useId, useRef, useState } from 'react';
-import { closeSocket, createChatSocket } from '../../apis';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
+import {
+  fetchConversation,
+  fetchConversationMembers,
+  fetchMessages,
+  sendMessage,
+  type MessageDto,
+} from '../../apis/conversations';
 import { useAuthStore } from '../../stores/authStore';
 
-type Role = 'self' | 'peer';
-
-type ChatMessage = {
-  id: string;
-  role: Role;
-  text: string;
-};
-
-const wsBase =
-  import.meta.env.VITE_WS_URL ?? 'ws://localhost:8081/ws/chat';
-
 const Chat = () => {
+  const { conversationId } = useParams<{ conversationId: string }>();
   const listId = useId();
   const listRef = useRef<HTMLDivElement>(null);
-  const wsRef = useRef<WebSocket | null>(null);
-  const token = useAuthStore((s) => s.token);
+  const myId = useAuthStore((s) => s.user?.id);
+  const [title, setTitle] = useState('Chat');
   const [input, setInput] = useState('');
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    { id: 'seed-1', role: 'peer', text: 'Hi.' },
-  ]);
+  const [messages, setMessages] = useState<MessageDto[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    if (!conversationId) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const conv = await fetchConversation(conversationId);
+      if (conv.type === 'GROUP') {
+        setTitle(conv.name || 'Nhóm');
+      } else if (myId) {
+        const members = await fetchConversationMembers(conversationId);
+        const peer = members.find((m) => m.userId !== myId);
+        setTitle(peer?.displayName || peer?.username || 'Chat');
+      } else {
+        setTitle('Chat');
+      }
+      const page = await fetchMessages(conversationId, 0, 100);
+      setMessages([...page.content].reverse());
+    } catch {
+      setError('Không tải được cuộc trò chuyện.');
+    } finally {
+      setLoading(false);
+    }
+  }, [conversationId, myId]);
 
   useEffect(() => {
-    const url = token
-      ? `${wsBase}?token=${encodeURIComponent(token)}`
-      : undefined;
-    const ws = createChatSocket(url, {
-      onMessage: (data) => {
-        setMessages((prev) => [
-          ...prev,
-          { id: crypto.randomUUID(), role: 'peer', text: data },
-        ]);
-      },
-    });
-    wsRef.current = ws;
-    return () => {
-      closeSocket(wsRef.current);
-      wsRef.current = null;
-    };
-  }, [token]);
+    void load();
+  }, [load]);
 
   useEffect(() => {
     const el = listRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages]);
 
-  const send = () => {
+  const submit = async () => {
     const text = input.trim();
-    if (!text) return;
-    setMessages((prev) => [
-      ...prev,
-      { id: crypto.randomUUID(), role: 'self', text },
-    ]);
+    if (!text || !conversationId) return;
     setInput('');
-    const ws = wsRef.current;
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(text);
+    try {
+      const msg = await sendMessage(conversationId, text);
+      setMessages((prev) => [...prev, msg]);
+    } catch {
+      setInput(text);
     }
   };
 
+  if (!conversationId) {
+    return (
+      <p className="p-6 text-center text-neutral-500">Thiếu mã hội thoại.</p>
+    );
+  }
+
   return (
-    <div className="mx-auto flex min-h-screen max-w-md flex-col gap-3 p-4">
+    <div className="mx-auto flex min-h-screen max-w-md flex-col bg-neutral-50">
+      <header className="sticky top-0 z-10 flex items-center gap-2 border-b border-neutral-200 bg-white px-3 py-3">
+        <Link
+          to="/messages"
+          className="rounded-lg px-2 py-1 text-sm font-medium text-violet-700"
+        >
+          ←
+        </Link>
+        <h1 className="min-w-0 flex-1 truncate text-center text-base font-semibold text-neutral-900">
+          {title}
+        </h1>
+        <span className="w-8" />
+      </header>
+
+      {loading && (
+        <p className="px-4 py-6 text-center text-sm text-neutral-500">
+          Đang tải…
+        </p>
+      )}
+      {error && (
+        <p className="px-4 py-6 text-center text-sm text-red-600">{error}</p>
+      )}
+
       <div
         ref={listRef}
         id={listId}
-        className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto rounded-lg border border-neutral-200 p-3 dark:border-neutral-700"
+        className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-3 py-3"
         role="log"
         aria-live="polite"
       >
-        {messages.map((m) => (
-          <div
-            key={m.id}
-            className={
-              m.role === 'self'
-                ? 'self-end max-w-[85%] rounded-lg bg-violet-600 px-3 py-2 text-sm text-white'
-                : 'self-start max-w-[85%] rounded-lg bg-neutral-200 px-3 py-2 text-sm text-neutral-900 dark:bg-neutral-700 dark:text-neutral-100'
-            }
-          >
-            {m.text}
-          </div>
-        ))}
+        {!loading &&
+          messages.map((m) => {
+            const self = myId && m.senderId === myId;
+            return (
+              <div
+                key={m.id}
+                className={
+                  self
+                    ? 'self-end max-w-[85%] rounded-lg bg-violet-600 px-3 py-2 text-sm text-white'
+                    : 'self-start max-w-[85%] rounded-lg bg-neutral-200 px-3 py-2 text-sm text-neutral-900'
+                }
+              >
+                {m.content}
+              </div>
+            );
+          })}
       </div>
-      <div className="flex gap-2">
-        <input
-          className="min-w-0 flex-1 rounded border border-neutral-300 px-3 py-2 dark:border-neutral-600 dark:bg-neutral-900"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              send();
-            }
-          }}
-          placeholder="Message"
-          aria-label="Message"
-        />
-        <button
-          type="button"
-          className="shrink-0 rounded bg-violet-600 px-4 py-2 font-medium text-white"
-          onClick={send}
-        >
-          Send
-        </button>
+
+      <div className="border-t border-neutral-200 bg-white p-3">
+        <div className="flex gap-2">
+          <input
+            className="min-w-0 flex-1 rounded-full border border-neutral-300 px-4 py-2.5 text-sm outline-none focus:border-violet-500"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                void submit();
+              }
+            }}
+            placeholder="Nhắn tin…"
+            aria-label="Nhắn tin"
+          />
+          <button
+            type="button"
+            className="shrink-0 rounded-full bg-violet-600 px-5 py-2.5 text-sm font-medium text-white"
+            onClick={() => void submit()}
+          >
+            Gửi
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -18,3 +18,8 @@ export async function fetchUsers(
   const { data } = await client.get<DirectoryUser[]>('/api/users');
   return data.slice(0, capped);
 }
+
+export async function fetchAllUsers(): Promise<DirectoryUser[]> {
+  const { data } = await client.get<DirectoryUser[]>('/api/users');
+  return data;
+}

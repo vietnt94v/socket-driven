@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -46,6 +47,13 @@ public class ConversationController {
   @PostMapping
   public ConversationDto create(@RequestBody CreateConversationRequest request) {
     return conversationService.createConversation(CurrentUserId.get(), request);
+  }
+
+  @GetMapping("/direct")
+  public ConversationDto getDirect(@RequestParam("userId") UUID userId) {
+    return conversationService
+        .getDirectIfExists(CurrentUserId.get(), userId)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
   }
 
   @GetMapping("/{id}")
